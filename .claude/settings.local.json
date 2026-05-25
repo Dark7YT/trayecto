@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Push-Location \"C:\\\\Users\\\\sebas\\\\OneDrive\\\\Documents\\\\PersonalProjects\\\\km-cost-tracker\\\\trayecto-api\"; .\\\\mvnw.cmd -B -DskipTests compile 2>&1 | Select-Object -Last 20; Write-Output \"==EXIT=$LASTEXITCODE==\"; Pop-Location)"
+    ]
+  }
+}

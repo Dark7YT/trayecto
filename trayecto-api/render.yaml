@@ -1,0 +1,115 @@
+# =============================================================================
+# Render Blueprint para trayecto-api (Spring Boot 4.0.6 + Java 21).
+#
+# Render lee este archivo cuando creas un servicio con "New + → Blueprint"
+# y crea automáticamente los recursos definidos. Para deploys posteriores
+# (push a `main`), Render rebuilds y redeploys el servicio.
+#
+# Tier free: 750 horas/mes, 512MB RAM, 0.1 CPU. Tras 15 min sin requests
+# entra en sleep — el primer request tras dormir tarda ~30 segundos
+# (cold start). UptimeRobot pingando /actuator/health/liveness cada 10 min
+# mantiene el servicio caliente.
+# =============================================================================
+
+services:
+  - type: web
+    name: trayecto-api
+    runtime: docker
+    region: oregon          # us-west; cambiar si tu Neon está en otro lado
+    plan: free              # 512MB / 0.1 CPU / 750h/mes
+    branch: main
+    autoDeploy: true        # push a main → rebuild + redeploy
+
+    # Path relativo a la raíz del repo donde está el Dockerfile.
+    dockerfilePath: ./trayecto-api/Dockerfile
+    dockerContext: ./trayecto-api
+
+    # Render aplica este path para verificar que el servicio está vivo.
+    # liveness es más liviano que el full /health — sólo verifica que la JVM
+    # corre, no que la BD esté disponible (eso es readiness, otro endpoint).
+    healthCheckPath: /actuator/health/liveness
+
+    # Env vars: sync:false significa "no las tomes del repo, las configuro
+    # manualmente en el dashboard de Render". Esto evita commitear secretos.
+    # Los placeholders con generateValue:true los crea Render (útil para JWT).
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+
+      - key: PORT
+        value: 8080
+
+      # JWT — secret de firma HS256. Render genera uno random fuerte la primera vez.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_TTL
+        value: "900"
+      - key: JWT_REFRESH_TTL
+        value: "2592000"
+
+      # PostgreSQL (Neon free tier). Crea proyecto en https://neon.tech,
+      # copia la connection string y pégala en el dashboard de Render.
+      - key: DATABASE_URL
+        sync: false           # ej: jdbc:postgresql://ep-xxx.neon.tech/trayecto?sslmode=require
+      - key: DATABASE_USER
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+
+      # CORS: separar por comas si necesitas varios orígenes.
+      # ej: "https://trayecto.vercel.app,https://trayecto.app"
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+
+      # URL pública del frontend — la usa el backend en los enlaces de email
+      # (verificación, reset password, invitaciones).
+      - key: APP_URL
+        sync: false           # ej: https://trayecto.vercel.app
+
+      # Custom domain compartido — opcional. Si frontend y backend están en el
+      # mismo dominio padre (trayecto.app y api.trayecto.app), setea ".trayecto.app"
+      # para que la cookie del refresh sea visible desde el frontend route guard.
+      # Si NO usas custom domain (deploy a *.vercel.app + *.onrender.com), DEJAR VACÍO.
+      - key: COOKIE_DOMAIN
+        sync: false
+
+      # Google OAuth 2.0 — crea credenciales en https://console.cloud.google.com.
+      # Authorized redirect URI: https://<tu-api>.onrender.com/login/oauth2/code/google
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+
+      # reCAPTCHA v3 — crea site en https://www.google.com/recaptcha/admin/create.
+      # La site key (pública) va al frontend (NEXT_PUBLIC_RECAPTCHA_SITE_KEY);
+      # la secret key (privada) va acá.
+      - key: RECAPTCHA_SECRET_KEY
+        sync: false
+      - key: RECAPTCHA_MIN_SCORE
+        value: "0.5"
+
+      # Email — Gmail SMTP con App Password (15 min de setup, sin pagar dominio).
+      # 1. Activa 2FA en tu cuenta Google.
+      # 2. https://myaccount.google.com/apppasswords → genera App Password.
+      # 3. Pégala como BREVO_SMTP_KEY (el nombre quedó del setup inicial, pero
+      #    apunta a Gmail). Quota: 500 emails/día — suficiente para portfolio.
+      - key: BREVO_SMTP_HOST
+        value: smtp.gmail.com
+      - key: BREVO_SMTP_PORT
+        value: "587"
+      - key: BREVO_SMTP_USER
+        sync: false           # tu-gmail@gmail.com
+      - key: BREVO_SMTP_KEY
+        sync: false           # App Password de 16 chars sin espacios
+      - key: MAIL_FROM
+        sync: false           # mismo email que BREVO_SMTP_USER
+
+      # Cloudinary — opcional (foto del odómetro). El frontend ahora usa ImgBB
+      # directamente, así que estas vars pueden quedar vacías. Mantenidas por
+      # si en futuro re-activas el OCR server-side con Vision.
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

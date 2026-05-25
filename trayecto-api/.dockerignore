@@ -1,0 +1,40 @@
+# Solo enviamos al contexto Docker lo que el Dockerfile realmente necesita.
+# Excluir target/, .git/, node_modules/ y demás reduce el contexto de cientos
+# de MB a unos pocos.
+
+target/
+*.iml
+.idea/
+.vscode/
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# IDE locks
+.factorypath
+
+# Tests reports
+**/surefire-reports/
+**/failsafe-reports/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+.coverage
+coverage/
+
+# Local env files — secretos que NUNCA deben acabar en la imagen.
+.env
+.env.local
+.env.*.local
+
+# Documentación que no aplica al build
+*.md
+docs/
+LICENSE
