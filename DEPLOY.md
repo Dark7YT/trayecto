@@ -229,7 +229,7 @@ Si todo OK: **deploy completo**. ¡Listo!
 ## CI/CD automático
 
 A partir de ahora:
-- **Push a `main`** → GitHub Actions corre tests → Vercel y Render rebuild + redeploy.
+- **Push a `master`** → GitHub Actions corre tests → Vercel y Render rebuild + redeploy.
 - Si los tests fallan, ambos servicios siguen sirviendo la versión anterior — no se rompe prod.
 - Los PRs corren CI antes del merge → bloqueas merge si CI rojo.
 

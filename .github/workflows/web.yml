@@ -9,7 +9,7 @@ name: trayecto-web · CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "trayecto-web/**"
       - ".github/workflows/web.yml"

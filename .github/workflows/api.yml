@@ -1,9 +1,9 @@
 # =============================================================================
 # CI del backend: compila, corre tests (módulos + dominio + ArchUnit) y verifica
-# que la imagen Docker buildea. Se ejecuta en cada push a main y en cada PR.
+# que la imagen Docker buildea. Se ejecuta en cada push a master y en cada PR.
 #
 # NO deploya — Render hace auto-deploy directo de su lado al detectar el push
-# a main. Este workflow es la red de seguridad: si los tests fallan, Render
+# a master. Este workflow es la red de seguridad: si los tests fallan, Render
 # igual buildearía, pero como el PR no se mergea hasta verde, los rompimientos
 # se detectan antes del deploy.
 # =============================================================================
@@ -12,7 +12,7 @@ name: trayecto-api · CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "trayecto-api/**"
       - ".github/workflows/api.yml"

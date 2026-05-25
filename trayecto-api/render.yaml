@@ -3,7 +3,7 @@
 #
 # Render lee este archivo cuando creas un servicio con "New + → Blueprint"
 # y crea automáticamente los recursos definidos. Para deploys posteriores
-# (push a `main`), Render rebuilds y redeploys el servicio.
+# (push a `master`), Render rebuilds y redeploys el servicio.
 #
 # Tier free: 750 horas/mes, 512MB RAM, 0.1 CPU. Tras 15 min sin requests
 # entra en sleep — el primer request tras dormir tarda ~30 segundos
@@ -17,8 +17,8 @@ services:
     runtime: docker
     region: oregon          # us-west; cambiar si tu Neon está en otro lado
     plan: free              # 512MB / 0.1 CPU / 750h/mes
-    branch: main
-    autoDeploy: true        # push a main → rebuild + redeploy
+    branch: master
+    autoDeploy: true        # push a master → rebuild + redeploy
 
     # Path relativo a la raíz del repo donde está el Dockerfile.
     dockerfilePath: ./trayecto-api/Dockerfile
