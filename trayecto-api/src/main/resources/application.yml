@@ -63,7 +63,11 @@ management:
     health:
       probes:
         enabled: true
-      show-details: when-authorized
+      # `always` muestra los components (db/mail/diskSpace/etc.) en /actuator/health.
+      # No expone secretos — solo statuses UP/DOWN + mensajes técnicos. Útil para
+      # diagnóstico rápido en prod sin tener que autenticarse.
+      show-details: always
+      show-components: always
 
 server:
   port: ${PORT:8080}
