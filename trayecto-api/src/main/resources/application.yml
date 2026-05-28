@@ -155,10 +155,10 @@ app:
     secret-key: ${RECAPTCHA_SECRET_KEY}
     min-score: 0.5
   cloudinary:
-    cloud-name: ${CLOUDINARY_CLOUD_NAME}
-    api-key: ${CLOUDINARY_API_KEY}
-    api-secret: ${CLOUDINARY_API_SECRET}
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
     upload-preset: ${CLOUDINARY_UPLOAD_PRESET:trayecto_odometer}
   ocr:
-    google-credentials-base64: ${GOOGLE_APPLICATION_CREDENTIALS_JSON}
+    google-credentials-base64: ${GOOGLE_APPLICATION_CREDENTIALS_JSON:}
     monthly-quota-per-user: 50
