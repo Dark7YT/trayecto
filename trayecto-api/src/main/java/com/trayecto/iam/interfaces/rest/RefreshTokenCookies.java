@@ -14,10 +14,18 @@ import java.util.Optional;
  * Atributos:
  * - HttpOnly: JS del browser no la lee.
  * - Secure: solo HTTPS. En dev se desactiva para localhost.
- * - SameSite=Lax: protege CSRF sin romper navegación normal.
+ * - SameSite: depende del entorno
+ *     · prod (secure=true)  → "None" (necesario para cross-domain Vercel↔Render).
+ *                              Requiere Secure=true, lo cual se cumple en HTTPS.
+ *     · dev  (secure=false) → "Lax" (frontend y backend en localhost, mismo site).
  * - Path=/: necesario para que el middleware del frontend ({@code proxy.ts}) detecte la
  *   presencia de sesión en TODAS las rutas. Restringir el path rompe el route guard.
- *   No expone más superficie: la cookie sigue siendo HttpOnly + SameSite=Lax.
+ *   No expone más superficie: la cookie sigue siendo HttpOnly.
+ * - Domain (opcional): solo se setea cuando la env var COOKIE_DOMAIN está definida.
+ *   Útil cuando frontend y backend comparten dominio padre (ej. trayecto.app +
+ *   api.trayecto.app → COOKIE_DOMAIN=.trayecto.app). Sin esa var, se omite y el
+ *   browser asocia la cookie al host del backend, que sigue siendo válido cross-origin
+ *   con SameSite=None.
  */
 public final class RefreshTokenCookies {
 
@@ -27,25 +35,34 @@ public final class RefreshTokenCookies {
     private RefreshTokenCookies() {}
 
     public static String buildSetCookie(String rawToken, long ttlSeconds, boolean secure) {
-        return ResponseCookie.from(COOKIE_NAME, rawToken)
+        String sameSite = secure ? "None" : "Lax";
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(COOKIE_NAME, rawToken)
             .httpOnly(true)
             .secure(secure)
-            .sameSite("Lax")
+            .sameSite(sameSite)
             .path(COOKIE_PATH)
-            .maxAge(Duration.ofSeconds(ttlSeconds))
-            .build()
-            .toString();
+            .maxAge(Duration.ofSeconds(ttlSeconds));
+        applyCookieDomain(builder);
+        return builder.build().toString();
     }
 
     public static String buildClearCookie(boolean secure) {
-        return ResponseCookie.from(COOKIE_NAME, "")
+        String sameSite = secure ? "None" : "Lax";
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(COOKIE_NAME, "")
             .httpOnly(true)
             .secure(secure)
-            .sameSite("Lax")
+            .sameSite(sameSite)
             .path(COOKIE_PATH)
-            .maxAge(0)
-            .build()
-            .toString();
+            .maxAge(0);
+        applyCookieDomain(builder);
+        return builder.build().toString();
+    }
+
+    private static void applyCookieDomain(ResponseCookie.ResponseCookieBuilder builder) {
+        String domain = System.getenv("COOKIE_DOMAIN");
+        if (domain != null && !domain.isBlank()) {
+            builder.domain(domain.trim());
+        }
     }
 
     public static Optional<String> readRefreshToken(HttpServletRequest request) {
