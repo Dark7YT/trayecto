@@ -49,10 +49,14 @@ app:
   mail:
     from: ${MAIL_FROM:noreply@trayecto.app}
     app-url: ${APP_URL:http://localhost:3000}
-    # "smtp" (default, usa JavaMailSender con Brevo/Gmail) o "resend" (HTTP API).
-    # Render free bloquea puertos SMTP outbound → en prod usar "resend".
+    # Provider selector:
+    #   "smtp"   → dev local con Gmail/Brevo SMTP (no funciona en Render)
+    #   "resend" → HTTP API Resend (sandbox: solo envía a TU email verificado)
+    #   "brevo"  → HTTP API Brevo (envía a CUALQUIER destinatario, requiere
+    #              sender verification de tu Gmail en su dashboard)
     provider: ${APP_MAIL_PROVIDER:smtp}
     resend-api-key: ${RESEND_API_KEY:}
+    brevo-api-key: ${BREVO_API_KEY:}
   recaptcha:
     secret-key: ${RECAPTCHA_SECRET_KEY:}
     min-score: ${RECAPTCHA_MIN_SCORE:0.5}

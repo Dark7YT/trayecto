@@ -89,14 +89,25 @@ services:
         value: "0.5"
 
       # Email — Render free bloquea puertos SMTP outbound (25/465/587), así que
-      # NO podemos usar Gmail/Brevo SMTP. Usamos Resend (HTTP API): 100 emails/día
-      # gratis, sin tarjeta. Crear cuenta en https://resend.com → Settings → API Keys.
+      # NO podemos usar Gmail/Brevo SMTP. Usamos provider HTTP API.
+      #
+      # Provider recomendado para portfolio público: BREVO
+      #   - 300 emails/día gratis sin dominio propio
+      #   - Solo requiere verificar tu Gmail como "sender" en su dashboard (5 min)
+      #   - Envía a CUALQUIER destinatario una vez verificado el sender
+      #   - Setup: https://app.brevo.com → Senders → verify Gmail → API Keys
+      #
+      # Alternativa: RESEND (sandbox)
+      #   - 100 emails/día pero SOLO envía a TU email verificado (limitación
+      #     del free tier sin dominio propio)
       - key: APP_MAIL_PROVIDER
-        value: resend         # selecciona ResendMailSender via @ConditionalOnProperty
+        value: brevo          # selecciona BrevoApiMailSender; cambiar a "resend" si querés volver atrás
+      - key: BREVO_API_KEY
+        sync: false           # xkeysib-XXXX (de Brevo dashboard → API Keys)
       - key: RESEND_API_KEY
-        sync: false           # re_XXXXXXXX (de Resend dashboard)
+        sync: false           # re_XXXX — opcional, solo si querés provider=resend
       - key: MAIL_FROM
-        sync: false           # "Trayecto <onboarding@resend.dev>" hasta que tengas dominio verificado
+        sync: false           # "Trayecto <tu-email-verificado@gmail.com>" — debe coincidir con el sender verificado en Brevo
 
       # Vars SMTP del provider anterior (Gmail/Brevo). Inertes en prod porque
       # @ConditionalOnProperty(name="app.mail.provider", havingValue="smtp")
