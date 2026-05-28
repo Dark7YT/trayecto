@@ -5,6 +5,7 @@ import com.trayecto.iam.domain.RefreshTokenRepository;
 import com.trayecto.iam.domain.User;
 import com.trayecto.iam.domain.UserRepository;
 import com.trayecto.iam.interfaces.rest.RefreshTokenCookies;
+import com.trayecto.shared.kernel.Email;
 import com.trayecto.shared.kernel.UserId;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -62,10 +63,29 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     ) throws IOException {
         OAuth2User oauthUser = (OAuth2User) authentication.getPrincipal();
         String userIdStr = GoogleOAuth2UserService.extractUserId(oauthUser);
-        UserId userId = UserId.of(UUID.fromString(userIdStr));
 
-        User user = userRepository.findById(userId)
-            .orElseThrow(() -> new IllegalStateException("User missing after OAuth login: " + userIdStr));
+        // Path normal: GoogleOAuth2UserService enriqueció los attrs con trayecto_user_id.
+        // Fallback: si el atributo no llegó (lazy-init race, proxy issue, etc.) buscamos
+        // por email — más resiliente que crashear con NullPointerException sobre UUID.fromString.
+        User user;
+        if (userIdStr != null && !userIdStr.isBlank()) {
+            UserId userId = UserId.of(UUID.fromString(userIdStr));
+            user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalStateException(
+                    "User missing after OAuth login (id=" + userIdStr + ")"));
+        } else {
+            String email = (String) oauthUser.getAttributes().get("email");
+            if (email == null || email.isBlank()) {
+                log.error("OAuth login success but neither userId nor email available. Attrs keys: {}",
+                    oauthUser.getAttributes().keySet());
+                response.sendRedirect(appUrl + "/login?error=oauth_failed");
+                return;
+            }
+            log.warn("OAuth user_id attribute missing — falling back to email lookup ({})", email);
+            user = userRepository.findByEmail(Email.of(email))
+                .orElseThrow(() -> new IllegalStateException(
+                    "User not found by email after OAuth: " + email));
+        }
 
         String accessToken = jwtService.generateAccessToken(user.id(), user.email());
         String refreshRaw = jwtService.generateRefreshTokenRaw();

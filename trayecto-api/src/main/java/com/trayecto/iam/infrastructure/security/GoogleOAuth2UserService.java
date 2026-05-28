@@ -52,6 +52,7 @@ public class GoogleOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
     @Override
     @Transactional
     public OAuth2User loadUser(OAuth2UserRequest request) throws OAuth2AuthenticationException {
+        log.info("GoogleOAuth2UserService.loadUser invoked");
         OAuth2User oauthUser = delegate.loadUser(request);
         Map<String, Object> attrs = oauthUser.getAttributes();
 
@@ -59,6 +60,8 @@ public class GoogleOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         String emailValue = (String) attrs.get("email");
         Object emailVerified = attrs.get("email_verified");
         String name = (String) attrs.getOrDefault("name", emailValue);
+        log.info("Google OAuth loadUser: email={}, verified={}, sub={}",
+            emailValue, emailVerified, googleSub != null ? googleSub.substring(0, Math.min(8, googleSub.length())) + "***" : "null");
 
         if (googleSub == null || emailValue == null) {
             throw new OAuth2AuthenticationException(new OAuth2Error("invalid_user_info",
@@ -96,7 +99,12 @@ public class GoogleOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         // Devolvemos un OAuth2User con un atributo extra para que el SuccessHandler
         // recupere el UserId sin volver a consultar la BD.
         Map<String, Object> enrichedAttrs = new HashMap<>(attrs);
-        enrichedAttrs.put(USER_ID_ATTRIBUTE, user.id().asString());
+        String userIdStr = user.id() != null ? user.id().asString() : null;
+        if (userIdStr == null) {
+            log.error("User id is null after save! email={}, user.toString={}", emailValue, user);
+        }
+        enrichedAttrs.put(USER_ID_ATTRIBUTE, userIdStr);
+        log.info("Google OAuth loadUser returning enriched user with id={}", userIdStr);
         return new DefaultOAuth2User(
             List.of(new SimpleGrantedAuthority("ROLE_USER")),
             enrichedAttrs,
