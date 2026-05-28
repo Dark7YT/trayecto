@@ -88,21 +88,28 @@ services:
       - key: RECAPTCHA_MIN_SCORE
         value: "0.5"
 
-      # Email — Gmail SMTP con App Password (15 min de setup, sin pagar dominio).
-      # 1. Activa 2FA en tu cuenta Google.
-      # 2. https://myaccount.google.com/apppasswords → genera App Password.
-      # 3. Pégala como BREVO_SMTP_KEY (el nombre quedó del setup inicial, pero
-      #    apunta a Gmail). Quota: 500 emails/día — suficiente para portfolio.
+      # Email — Render free bloquea puertos SMTP outbound (25/465/587), así que
+      # NO podemos usar Gmail/Brevo SMTP. Usamos Resend (HTTP API): 100 emails/día
+      # gratis, sin tarjeta. Crear cuenta en https://resend.com → Settings → API Keys.
+      - key: APP_MAIL_PROVIDER
+        value: resend         # selecciona ResendMailSender via @ConditionalOnProperty
+      - key: RESEND_API_KEY
+        sync: false           # re_XXXXXXXX (de Resend dashboard)
+      - key: MAIL_FROM
+        sync: false           # "Trayecto <onboarding@resend.dev>" hasta que tengas dominio verificado
+
+      # Vars SMTP del provider anterior (Gmail/Brevo). Inertes en prod porque
+      # @ConditionalOnProperty(name="app.mail.provider", havingValue="smtp")
+      # apaga BrevoMailSender cuando APP_MAIL_PROVIDER=resend. Las dejamos por
+      # si en el futuro migras de PaaS y querés volver a SMTP sin re-deployar.
       - key: BREVO_SMTP_HOST
         value: smtp.gmail.com
       - key: BREVO_SMTP_PORT
         value: "587"
       - key: BREVO_SMTP_USER
-        sync: false           # tu-gmail@gmail.com
+        sync: false           # opcional en prod (no se usa con resend)
       - key: BREVO_SMTP_KEY
-        sync: false           # App Password de 16 chars sin espacios
-      - key: MAIL_FROM
-        sync: false           # mismo email que BREVO_SMTP_USER
+        sync: false           # opcional en prod (no se usa con resend)
 
       # Cloudinary — opcional (foto del odómetro). El frontend ahora usa ImgBB
       # directamente, así que estas vars pueden quedar vacías. Mantenidas por

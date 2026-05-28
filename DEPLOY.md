@@ -219,34 +219,49 @@ Para anti-bot en register/login.
 
 ---
 
-## 5. Configurar Gmail SMTP con App Password (3 min)
+## 5. Configurar Resend para envío de emails (3 min)
 
-Para que el backend mande emails de verificación, reset password, e invitaciones.
+> **¿Por qué Resend y no Gmail SMTP?** Render free tier **bloquea los puertos
+> SMTP outbound** (25, 465, 587) para evitar abuso. Cualquier provider SMTP
+> (Gmail, Brevo, SendGrid) falla con timeout. Resend ofrece API HTTP
+> (`POST /emails`) que pasa el bloqueo. Quota free: **100 emails/día = 3.000/mes**.
 
-1. Asegurate de tener **2-Step Verification** activado:
-   https://myaccount.google.com/security
-   Si no, actívalo primero (es obligatorio para usar App Passwords).
+### 5.1 Crear cuenta
 
-2. Andá a https://myaccount.google.com/apppasswords
-   (Si no aparece, asegurate de tener 2FA activo y refrescá.)
+1. Abrí **https://resend.com** → **Sign up** (con GitHub o email).
+2. Confirma tu email (link de bienvenida).
 
-3. **Generate new app password**:
-   - **App name**: `Trayecto`
-   - Click **Create**.
-   - Te muestra una cadena de 16 caracteres con espacios, tipo:
-     ```
-     abcd efgh ijkl mnop
-     ```
+### 5.2 Crear API Key
 
-4. **Anota**:
-   - `BREVO_SMTP_USER` = tu email completo (ej. `sebastianjae21@gmail.com`)
-   - `BREVO_SMTP_KEY` = los 16 caracteres **SIN espacios** (ej. `abcdefghijklmnop`)
-   - `MAIL_FROM` = el mismo email que `BREVO_SMTP_USER`
+1. En el dashboard, sidebar izquierdo → **API Keys**.
+2. Click **"+ Create API Key"**.
+3. Configurá:
+   - **Name**: `Trayecto Production`
+   - **Permission**: Full access (default).
+   - **Domain**: `All domains`.
+4. Click **Add**. Te muestra la key UNA vez, con formato:
+   ```
+   re_AbCdEfGh_1234567890XYZ
+   ```
+5. **Copiala a tu txt YA**:
+   ```
+   RESEND_API_KEY=re_AbCdEfGh_1234567890XYZ
+   ```
 
-> El prefijo `BREVO_` quedó del setup original (cuando se usaba Brevo SMTP).
-> Apuntar a Gmail funciona igual — la quota es 500 emails/día, suficiente
-> para portfolio. Si después te molesta el nombre, podés renombrar las vars
-> en `application.yml` + en Render.
+### 5.3 Remitente sin dominio propio
+
+Resend te permite enviar **desde `onboarding@resend.dev`** sin verificar nada,
+pero **solo al email verificado en tu cuenta** (el que usaste al registrarte).
+Para portfolio donde solo vos vas a probar, es perfecto.
+
+Anotá en tu txt:
+```
+MAIL_FROM=Trayecto <onboarding@resend.dev>
+```
+
+> **Si en el futuro compras un dominio**: en Resend → Domains → Add Domain →
+> agregás un registro DNS TXT + uno DKIM. Después podés cambiar `MAIL_FROM` a
+> `noreply@tudominio.com` y enviar a cualquier dirección sin restricciones.
 
 ---
 
@@ -299,15 +314,17 @@ existentes** y completá esta tabla EXACTA:
 | `GOOGLE_OAUTH_CLIENT_ID` | `135170...apps.googleusercontent.com` | Paso 3 |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | `GOCSPX-...` | Paso 3 |
 | `RECAPTCHA_SECRET_KEY` | `6Ldzbv...` | Paso 4 (Secret Key, no Site Key) |
-| `BREVO_SMTP_USER` | `tu-email@gmail.com` | Paso 5 |
-| `BREVO_SMTP_KEY` | `abcdefghijklmnop` (16 chars sin espacios) | Paso 5 |
-| `MAIL_FROM` | `tu-email@gmail.com` | Paso 5 (mismo que `BREVO_SMTP_USER`) |
+| `RESEND_API_KEY` | `re_AbCdEfGh_...` | Paso 5 |
+| `MAIL_FROM` | `Trayecto <onboarding@resend.dev>` | Paso 5 (placeholder de Resend sin dominio propio) |
 
 **No toques**: `JWT_SECRET` (auto-generada), `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`,
-`PORT`, `SPRING_PROFILES_ACTIVE`, `BREVO_SMTP_HOST`, `BREVO_SMTP_PORT`,
-`RECAPTCHA_MIN_SCORE`. Render las setea según `render.yaml`.
+`PORT`, `SPRING_PROFILES_ACTIVE`, `APP_MAIL_PROVIDER` (=resend),
+`BREVO_SMTP_HOST`, `BREVO_SMTP_PORT`, `RECAPTCHA_MIN_SCORE`. Render las setea
+según `render.yaml`.
 
-**Dejá vacías** (deprecated): `CLOUDINARY_*`.
+**Dejá vacías** (inertes en prod con Resend): `BREVO_SMTP_USER`,
+`BREVO_SMTP_KEY`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`,
+`CLOUDINARY_API_SECRET`.
 
 > Después de agregar/cambiar vars, Render dispara un **redeploy automático**.
 > Si el primer build aún no terminó, el nuevo build cancela el anterior — eso es OK.

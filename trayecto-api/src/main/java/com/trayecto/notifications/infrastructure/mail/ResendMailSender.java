@@ -2,38 +2,64 @@ package com.trayecto.notifications.infrastructure.mail;
 
 import com.trayecto.notifications.api.MailDispatchPort;
 import com.trayecto.shared.kernel.Email;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 
 /**
- * Envía correos transaccionales vía SMTP (Brevo/Gmail/cualquier proveedor SMTP).
- * Se invocan desde {@code @ApplicationModuleListener} (Modulith outbox + retry en restart).
+ * Envía correos transaccionales vía la API HTTP de Resend (https://resend.com).
  * <p>
- * Activo por default ({@code app.mail.provider=smtp}). En Render free (que bloquea
- * puertos SMTP outbound) se reemplaza por {@link ResendMailSender} configurando
- * {@code app.mail.provider=resend}.
+ * Existe porque <strong>Render free tier bloquea los puertos SMTP outbound</strong>
+ * (25, 465, 587) para evitar abuso. JavaMail timeout-ea conectando a smtp.gmail.com.
+ * Resend ofrece API HTTP (POST a /emails) que pasa el bloqueo y nos da 100 emails/día
+ * gratis en tier free — más que suficiente para portfolio.
+ * <p>
+ * Activación: {@code app.mail.provider=resend} en el {@code application.yml} del
+ * profile prod (o env var {@code APP_MAIL_PROVIDER=resend}). La API key se lee
+ * de {@code RESEND_API_KEY}.
+ * <p>
+ * El remitente ({@code app.mail.from}) debe usar un dominio verificado en Resend.
+ * Por default Resend acepta {@code onboarding@resend.dev} para uso de desarrollo
+ * pero solo envía al email verificado en la cuenta. Para enviar a cualquier dirección,
+ * verificar un dominio propio.
  */
 @Service
-@ConditionalOnProperty(name = "app.mail.provider", havingValue = "smtp", matchIfMissing = true)
-public class BrevoMailSender implements MailDispatchPort {
+@ConditionalOnProperty(name = "app.mail.provider", havingValue = "resend")
+public class ResendMailSender implements MailDispatchPort {
 
-    private static final Logger log = LoggerFactory.getLogger(BrevoMailSender.class);
+    private static final Logger log = LoggerFactory.getLogger(ResendMailSender.class);
+    private static final String ENDPOINT = "https://api.resend.com/emails";
 
-    private final JavaMailSender mailSender;
+    private final RestClient http;
     private final AppMailProperties props;
 
-    public BrevoMailSender(JavaMailSender mailSender, AppMailProperties props) {
-        this.mailSender = mailSender;
+    public ResendMailSender(AppMailProperties props) {
         this.props = props;
+        if (props.resendApiKey() == null || props.resendApiKey().isBlank()) {
+            throw new IllegalStateException(
+                "app.mail.provider=resend pero RESEND_API_KEY no está configurado. " +
+                "Crear una API key en https://resend.com → Settings → API Keys.");
+        }
+        this.http = RestClient.builder()
+            .baseUrl(ENDPOINT)
+            .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + props.resendApiKey())
+            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+            .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+            .build();
+        log.info("ResendMailSender enabled (from={}, key=re_***{})",
+            props.from(),
+            props.resendApiKey().length() > 4
+                ? props.resendApiKey().substring(props.resendApiKey().length() - 4)
+                : "?");
     }
 
     @Override
@@ -154,16 +180,24 @@ public class BrevoMailSender implements MailDispatchPort {
     }
 
     private void sendHtml(Email to, String subject, String body) {
+        Map<String, Object> payload = Map.of(
+            "from", props.from(),
+            "to", List.of(to.value()),
+            "subject", subject,
+            "html", body
+        );
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, false, StandardCharsets.UTF_8.name());
-            helper.setFrom(props.from());
-            helper.setTo(to.value());
-            helper.setSubject(subject);
-            helper.setText(body, true);
-            mailSender.send(message);
-            log.info("Sent '{}' to {}", subject, mask(to.value()));
-        } catch (MessagingException e) {
+            http.post()
+                .body(payload)
+                .retrieve()
+                .toBodilessEntity();
+            log.info("Sent '{}' to {} via Resend", subject, mask(to.value()));
+        } catch (RestClientResponseException e) {
+            // 4xx/5xx de Resend — incluye el body en el log para diagnóstico
+            log.warn("Resend rechazó '{}' a {}: status={} body={}",
+                subject, mask(to.value()), e.getStatusCode(), e.getResponseBodyAsString());
+            throw new RuntimeException("Resend send failed: " + e.getStatusCode(), e);
+        } catch (Exception e) {
             log.warn("Failed to send '{}' to {}: {}", subject, mask(to.value()), e.getMessage());
             throw new RuntimeException(e);
         }
