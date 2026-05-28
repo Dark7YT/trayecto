@@ -141,13 +141,24 @@ spring:
     hibernate:
       ddl-auto: validate
   mail:
-    host: ${BREVO_SMTP_HOST}
-    port: ${BREVO_SMTP_PORT}
-    username: ${BREVO_SMTP_USER}
-    password: ${BREVO_SMTP_KEY}
+    # Vars SMTP inertes en prod (usamos Resend HTTP). Spring auto-configura
+    # JavaMailSender pero nadie lo inyecta cuando APP_MAIL_PROVIDER=resend.
+    host: ${BREVO_SMTP_HOST:smtp.gmail.com}
+    port: ${BREVO_SMTP_PORT:587}
+    username: ${BREVO_SMTP_USER:}
+    password: ${BREVO_SMTP_KEY:}
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
+
+# Render free bloquea puertos SMTP outbound, así que el MailHealthIndicator
+# de Spring Boot (que hace TRANSPORT.connect() a smtp.gmail.com:587) siempre
+# va a dar DOWN. Lo deshabilitamos — la salud del envío de mails ahora la
+# garantiza Resend HTTP (si su API cae, los logs lo muestran).
+management:
+  health:
+    mail:
+      enabled: false
 
 server:
   compression:
