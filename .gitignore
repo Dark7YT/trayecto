@@ -66,3 +66,9 @@ $RECYCLE.BIN/
 *.swp
 *.zip
 *.tar.gz
+
+# ---------- Repo split ----------
+# El frontend vive en un repo separado (Dark7YT/trayecto-web). Localmente
+# está clonado como subdirectorio aquí por conveniencia, pero NO debe
+# trackearse desde este repo — su propio .git lo maneja.
+/trayecto-web/
