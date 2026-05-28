@@ -5,13 +5,13 @@ import com.trayecto.iam.domain.RefreshTokenRepository;
 import com.trayecto.iam.domain.User;
 import com.trayecto.iam.domain.UserRepository;
 import com.trayecto.iam.interfaces.rest.RefreshTokenCookies;
-import com.trayecto.shared.kernel.Email;
 import com.trayecto.shared.kernel.UserId;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
@@ -29,8 +29,12 @@ import java.util.UUID;
  * Al completar OAuth2 Google con éxito, emite access + refresh token igual que login local
  * y redirige al frontend con el access en el fragmento de la URL (para no exponerlo en
  * el query string que queda en el server log).
+ * <p>
+ * Marcado {@code @Lazy(false)} porque con {@code spring.main.lazy-initialization=true}
+ * Spring Security puede construir el filter chain antes de inicializar este bean.
  */
 @Component
+@Lazy(false)
 public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private static final Logger log = LoggerFactory.getLogger(OAuth2LoginSuccessHandler.class);
@@ -38,6 +42,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtService jwtService;
+    private final GoogleOAuth2UserService googleOAuth2UserService;
     private final boolean secureCookies;
 
     @Value("${app.mail.app-url:http://localhost:3000}")
@@ -47,11 +52,13 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         UserRepository userRepository,
         RefreshTokenRepository refreshTokenRepository,
         JwtService jwtService,
+        GoogleOAuth2UserService googleOAuth2UserService,
         Environment env
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.jwtService = jwtService;
+        this.googleOAuth2UserService = googleOAuth2UserService;
         this.secureCookies = !env.matchesProfiles("dev");
     }
 
@@ -64,9 +71,11 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         OAuth2User oauthUser = (OAuth2User) authentication.getPrincipal();
         String userIdStr = GoogleOAuth2UserService.extractUserId(oauthUser);
 
-        // Path normal: GoogleOAuth2UserService enriqueció los attrs con trayecto_user_id.
-        // Fallback: si el atributo no llegó (lazy-init race, proxy issue, etc.) buscamos
-        // por email — más resiliente que crashear con NullPointerException sobre UUID.fromString.
+        // Path normal: el GoogleOAuth2UserService enriqueció los attrs con trayecto_user_id.
+        // Fallback: si por algún motivo Spring Security usó el DefaultOAuth2UserService
+        // directamente y nuestros attrs enriched no llegaron, hacemos la upsert acá usando
+        // los attrs crudos de Google. Doble red de seguridad — el usuario siempre logra
+        // loguearse sin importar el camino que tomó Spring Security.
         User user;
         if (userIdStr != null && !userIdStr.isBlank()) {
             UserId userId = UserId.of(UUID.fromString(userIdStr));
@@ -74,17 +83,14 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
                 .orElseThrow(() -> new IllegalStateException(
                     "User missing after OAuth login (id=" + userIdStr + ")"));
         } else {
-            String email = (String) oauthUser.getAttributes().get("email");
-            if (email == null || email.isBlank()) {
-                log.error("OAuth login success but neither userId nor email available. Attrs keys: {}",
-                    oauthUser.getAttributes().keySet());
+            log.warn("OAuth user_id attribute missing — running upsert from raw Google attrs as fallback");
+            try {
+                user = googleOAuth2UserService.upsertFromGoogleAttributes(oauthUser.getAttributes());
+            } catch (Exception e) {
+                log.error("OAuth upsert fallback failed: {}", e.getMessage(), e);
                 response.sendRedirect(appUrl + "/login?error=oauth_failed");
                 return;
             }
-            log.warn("OAuth user_id attribute missing — falling back to email lookup ({})", email);
-            user = userRepository.findByEmail(Email.of(email))
-                .orElseThrow(() -> new IllegalStateException(
-                    "User not found by email after OAuth: " + email));
         }
 
         String accessToken = jwtService.generateAccessToken(user.id(), user.email());
@@ -107,7 +113,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         String redirectUrl = appUrl + "/oauth/callback#access_token="
             + URLEncoder.encode(accessToken, StandardCharsets.UTF_8)
             + "&expires_in=" + jwtService.accessTtlSeconds();
-        log.info("OAuth Google login success for userId={}, redirecting", userIdStr);
+        log.info("OAuth Google login success for userId={}, redirecting", user.id().asString());
         response.sendRedirect(redirectUrl);
     }
 }
