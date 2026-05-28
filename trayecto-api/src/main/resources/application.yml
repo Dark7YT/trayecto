@@ -106,16 +106,24 @@ spring:
   config:
     activate:
       on-profile: prod
+  # Lazy init: Spring solo instancia beans cuando se llaman por primera vez.
+  # Reduce el footprint del bootstrap en ~80-120MB. Trade-off: el primer
+  # request a un endpoint nunca usado va a tardar ~200ms extra mientras se
+  # construye la cadena de beans. Para Render free (512MB) es necesario.
+  main:
+    lazy-initialization: true
   datasource:
     url: ${DATABASE_URL}
     username: ${DATABASE_USER}
     password: ${DATABASE_PASSWORD}
     hikari:
-      maximum-pool-size: 5
-      minimum-idle: 1
+      # Pool más conservador para Render free + Neon free (que pausa tras
+      # 5 min). 3 conexiones máx, 0 idle = libera cuando no hay tráfico.
+      maximum-pool-size: 3
+      minimum-idle: 0
       connection-timeout: 30000
       validation-timeout: 5000
-      idle-timeout: 120000
+      idle-timeout: 60000
       max-lifetime: 900000
       connection-test-query: SELECT 1
   flyway:

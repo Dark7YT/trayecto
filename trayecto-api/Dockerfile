@@ -40,7 +40,24 @@ COPY --from=builder --chown=app:app /build/app.jar /app/app.jar
 USER app
 EXPOSE 8080
 
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError" \
+# JVM tuneado para container de 512MB (Render free tier).
+# Cada flag explicada:
+#   MaxRAMPercentage=55  → heap ~280MB (deja ~230MB para non-heap: metaspace, code cache, threads, direct buffers)
+#   UseSerialGC          → ahorra ~30-50MB vs G1 en heaps chicos; pausas más largas pero aceptables
+#   Xss256k              → stack por thread (default 1MB); con ~30 threads ahorra ~25MB
+#   TieredStopAtLevel=1  → JIT solo tier 1 (sin C2 compiler); ahorra ~50MB de code cache + heap
+#   ReservedCodeCacheSize=48m → limita code cache (default 240MB)
+#   CICompilerCount=2    → menos threads del compilador JIT
+#   Spring jmx/preinit   → deshabilita features que cargan beans extra al boot
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=55.0 \
+               -XX:+UseSerialGC \
+               -Xss256k \
+               -XX:TieredStopAtLevel=1 \
+               -XX:ReservedCodeCacheSize=48m \
+               -XX:CICompilerCount=2 \
+               -XX:+ExitOnOutOfMemoryError \
+               -Dspring.jmx.enabled=false \
+               -Dspring.backgroundpreinitializer.ignore=true" \
     SPRING_PROFILES_ACTIVE=prod \
     TZ=America/Lima
 
