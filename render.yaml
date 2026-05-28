@@ -15,7 +15,7 @@ services:
   - type: web
     name: trayecto-api
     runtime: docker
-    region: oregon          # us-west; cambiar si tu Neon está en otro lado
+    region: virginia        # us-east-1; misma región que Neon → latencia mínima
     plan: free              # 512MB / 0.1 CPU / 750h/mes
     branch: master
     autoDeploy: true        # push a master → rebuild + redeploy
