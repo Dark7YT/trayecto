@@ -6,9 +6,13 @@ import com.trayecto.shared.kernel.exception.NotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.net.URI;
 import java.util.HashMap;
@@ -72,6 +76,42 @@ class GlobalExceptionHandler {
     ResponseEntity<ProblemDetail> illegalArgument(IllegalArgumentException ex) {
         return problem(HttpStatus.BAD_REQUEST, "request.invalid",
             "Bad Request", ex.getMessage(), Map.of());
+    }
+
+    // ============ Errores HTTP estándar (nunca deben ser 500) ============
+    // Antes caían en el catch-all Exception.class y devolvían 500 "server.unhandled".
+    // Ejemplo real: un GET a /api/v1/auth/refresh (que solo acepta POST) generaba un
+    // 500 en vez del 405 correcto. Mapearlos explícitamente da respuestas semánticas
+    // y deja de ensuciar los logs con falsos "Unhandled exception".
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    ResponseEntity<ProblemDetail> methodNotAllowed(HttpRequestMethodNotSupportedException ex) {
+        return problem(HttpStatus.METHOD_NOT_ALLOWED, "request.method_not_allowed",
+            "Method Not Allowed",
+            "El método " + ex.getMethod() + " no está permitido para este recurso.",
+            Map.of());
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    ResponseEntity<ProblemDetail> unsupportedMediaType(HttpMediaTypeNotSupportedException ex) {
+        return problem(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "request.unsupported_media_type",
+            "Unsupported Media Type",
+            "El tipo de contenido de la solicitud no está soportado.",
+            Map.of());
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<ProblemDetail> notReadable(HttpMessageNotReadableException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "request.malformed",
+            "Bad Request",
+            "El cuerpo de la solicitud está vacío o mal formado.",
+            Map.of());
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    ResponseEntity<ProblemDetail> noResource(NoResourceFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "request.not_found",
+            "Not Found", "El recurso solicitado no existe.", Map.of());
     }
 
     /**
