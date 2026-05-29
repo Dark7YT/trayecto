@@ -110,29 +110,44 @@ public class GoogleOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         Email email = Email.of(emailValue);
         DisplayName displayName = new DisplayName(name);
 
-        User user = userRepository.findByGoogleSubject(googleSub).orElse(null);
-        if (user == null) {
-            user = userRepository.findByEmail(email).orElse(null);
-        }
-
-        if (user == null) {
-            user = User.registerWithGoogle(
-                email, googleSub, displayName,
-                Locale.forLanguageTag("es-PE"), ZoneId.of("America/Lima")
-            );
-            user = userRepository.save(user);
-            log.info("Registered new user via Google OAuth: {}", emailValue);
-        } else {
-            if (user.status() == UserStatus.DEACTIVATED) {
+        // Caso 1 — LOGIN: ya existe una cuenta con este Google sub. Es la segunda
+        // (y siguientes) vez que el usuario entra con Google. NO modificamos nada
+        // ni guardamos: un login no debe re-vincular ni reescribir la cuenta. Antes
+        // este caso caía en linkGoogleAccount() + save(), lo que provocaba el fallo
+        // de OAuth ("Invalid credentials") en el segundo intento.
+        User byGoogle = userRepository.findByGoogleSubject(googleSub).orElse(null);
+        if (byGoogle != null) {
+            if (byGoogle.status() == UserStatus.DEACTIVATED) {
                 throw new OAuth2AuthenticationException(new OAuth2Error("account_deactivated",
                     "Account is deactivated", null));
             }
-            user.linkGoogleAccount(googleSub);
-            user = userRepository.save(user);
-            log.info("Linked Google account to existing user: {}", emailValue);
+            log.info("Google login for existing user: {}", emailValue);
+            return byGoogle;
         }
 
-        return user;
+        // Caso 2 — ACCOUNT LINKING: existe una cuenta LOCAL (email + password) con
+        // el mismo email. Vinculamos la identidad de Google para que pueda entrar
+        // por ambos métodos. Aquí sí guardamos (LOCAL → BOTH).
+        User byEmail = userRepository.findByEmail(email).orElse(null);
+        if (byEmail != null) {
+            if (byEmail.status() == UserStatus.DEACTIVATED) {
+                throw new OAuth2AuthenticationException(new OAuth2Error("account_deactivated",
+                    "Account is deactivated", null));
+            }
+            byEmail.linkGoogleAccount(googleSub);
+            User linked = userRepository.save(byEmail);
+            log.info("Linked Google identity to existing local account: {}", emailValue);
+            return linked;
+        }
+
+        // Caso 3 — REGISTRO: no hay cuenta previa. Creamos una nueva con Google.
+        User created = User.registerWithGoogle(
+            email, googleSub, displayName,
+            Locale.forLanguageTag("es-PE"), ZoneId.of("America/Lima")
+        );
+        User saved = userRepository.save(created);
+        log.info("Registered new user via Google OAuth: {}", emailValue);
+        return saved;
     }
 
     public static String extractUserId(OAuth2User user) {

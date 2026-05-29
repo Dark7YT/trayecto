@@ -34,19 +34,22 @@ class SecurityConfig {
     private final CorsProperties corsProperties;
     private final GoogleOAuth2UserService googleOAuth2UserService;
     private final OAuth2LoginSuccessHandler oauth2SuccessHandler;
+    private final OAuth2LoginFailureHandler oauth2FailureHandler;
 
     SecurityConfig(
         JwtAuthenticationFilter jwtAuthenticationFilter,
         RateLimitFilter rateLimitFilter,
         CorsProperties corsProperties,
         GoogleOAuth2UserService googleOAuth2UserService,
-        OAuth2LoginSuccessHandler oauth2SuccessHandler
+        OAuth2LoginSuccessHandler oauth2SuccessHandler,
+        OAuth2LoginFailureHandler oauth2FailureHandler
     ) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.rateLimitFilter = rateLimitFilter;
         this.corsProperties = corsProperties;
         this.googleOAuth2UserService = googleOAuth2UserService;
         this.oauth2SuccessHandler = oauth2SuccessHandler;
+        this.oauth2FailureHandler = oauth2FailureHandler;
     }
 
     @Bean
@@ -81,6 +84,10 @@ class SecurityConfig {
             .oauth2Login(oauth -> oauth
                 .userInfoEndpoint(ui -> ui.userService(googleOAuth2UserService))
                 .successHandler(oauth2SuccessHandler)
+                // Sin failureHandler, un OAuth fallido cae a la página default de
+                // Spring en el backend ("Invalid credentials"). Con él, redirige al
+                // frontend y loguea la causa real.
+                .failureHandler(oauth2FailureHandler)
             )
             // CRÍTICO: las rutas /api/** son REST/JSON. Cuando el auth falla, deben
             // devolver 401 JSON, NUNCA redirect a /login (HTML). Sin esto, oauth2Login
